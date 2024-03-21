@@ -12,7 +12,8 @@ import {
     Select,
     IndexTable,
     useIndexResourceState,
-    CalloutCard
+    CalloutCard,
+    InlineError
 } from '@shopify/polaris';
 import {useForm, Controller, useFieldArray} from "react-hook-form";
 import z from "zod"
@@ -20,31 +21,49 @@ import {zodResolver} from "@hookform/resolvers/zod";
 import {
     DeleteIcon
 } from '@shopify/polaris-icons';
-import React from "react";
 import {PlusCircleIcon} from "lucide-react";
+import {toast} from "react-hot-toast";
+import { addDoc, collection } from "firebase/firestore";
+
+import {  db } from "./firebase.ts";
+import * as React from "react";
+
+
+
 
 const formSchema= z.object({
-    campaign: z.string().min(5, {message:"campaign must at least 5 character"}),
-    desc:z.string(),
-    title:z.string(),
+    campaign: z.string().min(5, {message:"campaign must at least 5 character"}).trim(),
+    desc:z.string().optional(),
+    title:z.string().min(5, {message:"campaign must at least 5 character"}).trim(),
     option:z.array(
         z.object({
             option_title:z.string().min(2,{message:"option_title must at least 5 character"} ),
-            subtitle:z.string(),
-            quantity:z.number(),
-            label:z.string(),
-            discount_type: z.enum(['none', 'percent','each']),
-            amount: z.number().optional()
+            subtitle:z.string().optional(),
+            quantity:z
+                .coerce
+                .number(),
+            label:z.string().optional(),
+            discount_type: z.enum(['none', 'percent','each']).optional(),
+            amount:z
+                .coerce    // SOLUTION
+                .number().optional()
         })
-    ).min(2)
+    ).nonempty()
 })
+
+
 type FormStateType = z.infer<typeof formSchema>
 
-
+async function createDoc(data:FormStateType) {
+  return  await addDoc(collection(db, "discount"), {
+        data,
+        uid: '1'
+    })
+}
 function App() {
     const [open, setOpen] = React.useState(false)
-
-    const {formState:{errors},handleSubmit, control, watch} = useForm<FormStateType>({
+    const [_,startTransition] = React.useTransition()
+    const {formState:{errors},handleSubmit, control, watch, reset} = useForm<FormStateType>({
         resolver:zodResolver(formSchema),
         mode:"all"
     });
@@ -61,13 +80,26 @@ function App() {
     };
 
     const onSubmit = (data:FormStateType) => {
-        console.log("handleSubmit", data)
+        startTransition(() => {
+                toast.promise(createDoc(data),{
+                    loading:"Creating...",
+                    success:() => {
+                        reset();
+                        setOpen(false);
+                        console.log(_)
+                        return "creat success"
+                    },
+                    error:"Creat fail"
+                })
+            })
+
     }
+
+
 
     const watchOption =  watch('option')
     const {selectedResources, allResourcesSelected, handleSelectionChange} =
         useIndexResourceState(watchOption);
-
 
     const rowMarkup = watchOption && watchOption?.map(
         (
@@ -98,8 +130,8 @@ function App() {
                         {quantity}
                 </IndexTable.Cell>
                 <IndexTable.Cell>{label}</IndexTable.Cell>
-                <IndexTable.Cell>{discount_type}</IndexTable.Cell>
-                <IndexTable.Cell>{amount}</IndexTable.Cell>
+                <IndexTable.Cell>{discount_type === "percent" ? `% ${discount_type}`:discount_type }</IndexTable.Cell>
+                <IndexTable.Cell>{discount_type === "percent" ? `${amount} %`:amount }</IndexTable.Cell>
             </IndexTable.Row>
         ),
     );
@@ -112,7 +144,7 @@ function App() {
                 quantity:watchOption.length >0 ? Number(watchOption[watchOption.length-1]['quantity']) + 1 : 1,
                 label:"",
                 discount_type:"none",
-                amount:0
+                amount:1
             }
         )
     }
@@ -196,6 +228,7 @@ function App() {
                                   </div>
                                   {/* section */}
                                   <div className="space-y-20 border-4">
+                                      {errors.option &&  <InlineError message={errors.option ?  errors.option.message as string:''} fieldID="myFieldID" />}
                                       {optionFields?.map((_, index) =>
                                           {
                                               return  (
@@ -243,6 +276,8 @@ function App() {
                                                                                          autoComplete="off"
                                                                                          placeholder="Enter Subtitle"
                                                                                          {...field}
+                                                                                         error={errors.option ?( errors.option[index] as {option_title:{message:string}})?.option_title.message :""}
+
                                                                               />
                                                                           )}
                                                                       />
@@ -268,6 +303,10 @@ function App() {
                                                                                   autoComplete="off"
                                                                                   placeholder="Enter quantity"
                                                                                   type="number"
+                                                                                  min={1}
+                                                                                  value={field.value ? field.value.toString(): ''}
+                                                                                  onChange={field.onChange}
+                                                                                  error={errors.option ?( errors.option[index] as {quantity:{message:string}})?.quantity?.message :""}
                                                                               />
                                                                           )}
                                                                       />
@@ -300,18 +339,20 @@ function App() {
                                                                               />
                                                                           )}
                                                                       />
-                                                                      {watchOption[index]['discount_type'] == 'percent' && (
+                                                                      {watchOption && watchOption[index]['discount_type'] == 'percent' && (
                                                                           <Controller
                                                                               name={`option.${index}.amount`}
                                                                               control={control}
-                                                                              defaultValue={1}
                                                                               render={({ field }) => (
+
                                                                                   <TextField
-                                                                                      {...field}
                                                                                       label="amount"
                                                                                       type="number"
-                                                                                      placeholder="Enter amount"
+                                                                                      value={field.value ? field.value.toString(): ''}
+                                                                                      onChange={field.onChange}
+                                                                                      suffix="%"
                                                                                       autoComplete="off"
+                                                                                      min={1}
                                                                                   />
                                                                               )}
                                                                           />
@@ -342,8 +383,6 @@ function App() {
                   </Form>
               </div>
               <div>
-                  {JSON.stringify(watchOption, undefined, 2)}
-
                   <Card >
                       <div className="Polaris-LegacyStack__Item">
                           <h5 className="Polaris-Text--root Polaris-Text--headingLg">Preview</h5>
@@ -390,4 +429,4 @@ function App() {
   )
 }
 
-export default App
+export default App;
