@@ -10,56 +10,30 @@ import {
     InlineGrid,
     Button,
     Select,
-    IndexTable,
-    useIndexResourceState,
     CalloutCard,
-    InlineError
+    InlineError, IndexTable, Loading
 } from '@shopify/polaris';
 import {useForm, Controller, useFieldArray} from "react-hook-form";
-import z from "zod"
 import {zodResolver} from "@hookform/resolvers/zod";
 import {
     DeleteIcon
 } from '@shopify/polaris-icons';
 import {PlusCircleIcon} from "lucide-react";
 import {toast} from "react-hot-toast";
-import { addDoc, collection } from "firebase/firestore";
-
-import {  db } from "./firebase.ts";
 import * as React from "react";
+import {createDoc} from "./action.ts"
+import {FormStateType, formSchema} from "./validation.ts"
+import {DiscountTable} from "./_components/discount-table.tsx";
+import DiscountList from "./pages/discount-list.tsx";
+import {NonEmptyArray} from "@shopify/polaris/build/ts/src/types";
+import {IndexTableHeading} from "@shopify/polaris/build/ts/src/components/IndexTable";
 
 
+export  const resourceName = {
+    singular: 'order',
+    plural: 'orders',
+};
 
-
-const formSchema= z.object({
-    campaign: z.string().min(5, {message:"campaign must at least 5 character"}).trim(),
-    desc:z.string().optional(),
-    title:z.string().min(5, {message:"campaign must at least 5 character"}).trim(),
-    option:z.array(
-        z.object({
-            option_title:z.string().min(2,{message:"option_title must at least 5 character"} ),
-            subtitle:z.string().optional(),
-            quantity:z
-                .coerce
-                .number(),
-            label:z.string().optional(),
-            discount_type: z.enum(['none', 'percent','each']).optional(),
-            amount:z
-                .coerce    // SOLUTION
-                .number().optional()
-        })
-    ).nonempty()
-})
-
-
-type FormStateType = z.infer<typeof formSchema>
-
-async function createDoc(data:FormStateType) {
-  return  await addDoc(collection(db, "discount"), {
-        data,
-        uid: '1'
-    })
-}
 function App() {
     const [open, setOpen] = React.useState(false)
     const [_,startTransition] = React.useTransition()
@@ -67,17 +41,12 @@ function App() {
         resolver:zodResolver(formSchema),
         mode:"all"
     });
-
     const { fields: optionFields, append: appendOption, remove: removeOption } = useFieldArray({
         control,
         name: 'option',
     });
 
 
-    const resourceName = {
-        singular: 'order',
-        plural: 'orders',
-    };
 
     const onSubmit = (data:FormStateType) => {
         startTransition(() => {
@@ -94,47 +63,7 @@ function App() {
             })
 
     }
-
-
-
     const watchOption =  watch('option')
-    const {selectedResources, allResourcesSelected, handleSelectionChange} =
-        useIndexResourceState(watchOption);
-
-    const rowMarkup = watchOption && watchOption?.map(
-        (
-            {
-                option_title,
-                subtitle,
-                quantity,
-                label,
-                discount_type,
-                amount
-            },
-            index,
-        ) => (
-            <IndexTable.Row
-                id={index.toString()}
-                key={index}
-                selected={selectedResources.includes(index.toString())}
-                position={index}
-            >
-                <IndexTable.Cell>
-
-                        {option_title}
-                </IndexTable.Cell>
-                <IndexTable.Cell>
-                        {subtitle}
-                </IndexTable.Cell>
-                <IndexTable.Cell>
-                        {quantity}
-                </IndexTable.Cell>
-                <IndexTable.Cell>{label}</IndexTable.Cell>
-                <IndexTable.Cell>{discount_type === "percent" ? `% ${discount_type}`:discount_type }</IndexTable.Cell>
-                <IndexTable.Cell>{discount_type === "percent" ? `${amount} %`:amount }</IndexTable.Cell>
-            </IndexTable.Row>
-        ),
-    );
 
     const handleCreat = () => {
         appendOption(
@@ -151,23 +80,67 @@ function App() {
 
 
 
+    const column =  watchOption && watchOption?.map(
+            (
+                item,
+                index,
+            ) => (
+                <IndexTable.Row
+                    id={index.toString()}
+                    key={index}
+                    position={index}
+                >
+                    <IndexTable.Cell>
+                        {item.option_title}
+                    </IndexTable.Cell>
+                    <IndexTable.Cell>
+                        {item.subtitle}
+                    </IndexTable.Cell>
+                    <IndexTable.Cell>
+                        {item.quantity}
+                    </IndexTable.Cell>
+
+                    <IndexTable.Cell>{item.label}</IndexTable.Cell>
+                    <IndexTable.Cell>
+                        {item.discount_type === "percent" ?`% ${item.discount_type}`:item.discount_type === "each" ? `$ ${item.discount_type}`:item.discount_type }
+                    </IndexTable.Cell>
+                    <IndexTable.Cell>
+                        {item.discount_type === "percent" ?`${item.amount} $`:item.discount_type === "each" ? ` ${item.amount} $`:item.amount }
+
+                    </IndexTable.Cell>
+                </IndexTable.Row>
+            ),
+        )
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const header:NonEmptyArray<IndexTableHeading> =[
+        {title: 'Order'},
+        {title: 'Date'},
+        {title: 'Customer'},
+        {title: 'Total', alignment: 'end'},
+        {title: 'Payment status'},
+        {title: 'Fulfillment status'},
+    ]
+
+
     return (
     <>
 
-          <div className="grid grid-cols-3">
+          <div className="grid grid-cols-3 relative">
               <div className="col-span-2">
                   <Form  onSubmit={handleSubmit(onSubmit)}>
-
                       <Page
                           backAction={{content: 'Products', url: '#'}}
                           title="Create volume discount"
-                          secondaryActions={<button className="bg-orange-500 text-white p-2 cursor-pointer rounded-lg border-none" type="submit">Save</button>}
+                          secondaryActions={<button disabled={_}  className="bg-orange-500 text-white p-2 cursor-pointer rounded-lg border-none" type="submit">
+                              {_ ? <> <Loading /> Loading... </> :"Submit"}
+                          </button>}
                       >
                           <FormLayout>
                               <Card>
-
-
-
+                                  <div className="Polaris-LegacyStack__Item mb-3">
+                                      <h5 className="Polaris-Text--root Polaris-Text--headingLg">General</h5>
+                                  </div>
                                   <div className="space-y-3">
                                       <Controller
                                           name="campaign"
@@ -210,31 +183,27 @@ function App() {
                                           )}
                                       />
                                   </div>
-
-
                               </Card>
 
 
                               <Card>
-                                  <div className="relative">
+                                  <div className="sticky ">
                                       <BlockStack gap="500">
-                                          <div className="Polaris-LegacyStack__Item relative">
-                                              <h4 className="Polaris-Text--root Polaris-Text--headingXl">
-                                                  Volume discount rule
-                                              </h4>
+                                          <div className="Polaris-LegacyStack__Item">
+                                              <h5 className="Polaris-Text--root Polaris-Text--headingLg">Volume discount rule</h5>
                                           </div>
                                           <Divider />
                                       </BlockStack>
                                   </div>
                                   {/* section */}
-                                  <div className="space-y-20 border-4">
+                                  <div className="space-y-20 relative max-h-[500px] overflow-y-scroll">
                                       {errors.option &&  <InlineError message={errors.option ?  errors.option.message as string:''} fieldID="myFieldID" />}
                                       {optionFields?.map((_, index) =>
                                           {
                                               return  (
-                                                  <div key={index}  className=" rounded-md relative border border-red-600">
-                                                      <div className=" relative border h-auto min-h-40">
-                                                          <div className="relative ">
+                                                  <div key={index}  className=" rounded-md relative ">
+                                                      <div className=" relative h-auto min-h-40">
+                                                          <div className="relative border border-red-600">
                                                               <div id="section_no" className="absolute w-32 uppercase rounded-br-2xl bg-orange-500 text-white   p-2">
                                                                   option { index + 1}
                                                               </div>
@@ -339,7 +308,7 @@ function App() {
                                                                               />
                                                                           )}
                                                                       />
-                                                                      {watchOption && watchOption[index]['discount_type'] == 'percent' && (
+                                                                      {watchOption && (watchOption[index]['discount_type'] == 'percent' || watchOption[index]['discount_type'] == 'each') && (
                                                                           <Controller
                                                                               name={`option.${index}.amount`}
                                                                               control={control}
@@ -350,7 +319,7 @@ function App() {
                                                                                       type="number"
                                                                                       value={field.value ? field.value.toString(): ''}
                                                                                       onChange={field.onChange}
-                                                                                      suffix="%"
+                                                                                      suffix={`${watchOption[index]['discount_type'] == 'percent' ? '%' : '$'}`}
                                                                                       autoComplete="off"
                                                                                       min={1}
                                                                                   />
@@ -361,15 +330,13 @@ function App() {
 
                                                               </div>
                                                           </div>
-
-
                                                       </div>
                                                   </div>
                                               )
                                           }
 
                                       )}
-                                      <button type="button"  className=" cursor-pointer bg-orange-500 text-white border-none flex items-center p-2 rounded-md w-full justify-center "
+                                      <button type="button"  className="sticky bottom-0 z-30 cursor-pointer bg-orange-500 text-white border-none flex items-center p-2 rounded-md w-full justify-center "
                                               onClick={handleCreat}>
                                           <PlusCircleIcon className="mr-2 w-4 h-4 text-white"/>  Add Option
                                       </button>
@@ -382,7 +349,7 @@ function App() {
 
                   </Form>
               </div>
-              <div>
+              <div className="relative top-[5rem] mr-5 space-y-3">
                   <Card >
                       <div className="Polaris-LegacyStack__Item">
                           <h5 className="Polaris-Text--root Polaris-Text--headingLg">Preview</h5>
@@ -390,24 +357,13 @@ function App() {
 
                       <div id="content">
                           {watchOption && watchOption.length > 0 ? (
-                              <IndexTable
+                              <DiscountTable
+                                  data={watchOption}
+                                  mode="preview"
                                   resourceName={resourceName}
-                                  itemCount={watchOption.length}
-                                  selectedItemsCount={
-                                      allResourcesSelected ? 'All' : selectedResources.length
-                                  }
-                                  onSelectionChange={handleSelectionChange}
-                                  headings={[
-                                      {title: 'option_title'},
-                                      {title: 'subtitle'},
-                                      {title: 'quantity'},
-                                      {title: 'label'},
-                                      {title: 'discount_type'},
-                                      {title: 'amount'},
-                                  ]}
-                              >
-                                  {rowMarkup}
-                              </IndexTable>
+                                  column={column}
+                                  header={header}
+                              />
                           ):(
                               <div className="my-5">
                                   <CalloutCard
@@ -423,8 +379,13 @@ function App() {
                           )}
                       </div>
                   </Card>
+
               </div>
           </div>
+        <div className="my-5 p-5">
+            <DiscountList />
+        </div>
+
     </>
   )
 }
