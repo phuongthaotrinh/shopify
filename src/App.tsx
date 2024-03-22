@@ -37,7 +37,7 @@ export  const resourceName = {
 function App() {
     const [open, setOpen] = React.useState(false)
     const [_,startTransition] = React.useTransition()
-    const {formState:{errors},handleSubmit, control, watch, reset} = useForm<FormStateType>({
+    const {formState:{errors},trigger, handleSubmit, control, watch, reset} = useForm<FormStateType>({
         resolver:zodResolver(formSchema),
         mode:"all"
     });
@@ -114,15 +114,15 @@ function App() {
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const header:NonEmptyArray<IndexTableHeading> =[
-        {title: 'Order'},
-        {title: 'Date'},
-        {title: 'Customer'},
-        {title: 'Total', alignment: 'end'},
-        {title: 'Payment status'},
-        {title: 'Fulfillment status'},
+        {title: 'Option title'},
+        {title: 'Subtitle'},
+        {title: 'Quantity'},
+        {title: 'Label'},
+        {title: 'Discount type'},
+        {title: 'Amount'},
     ]
 
-
+    console.log(_)
     return (
     <>
 
@@ -132,7 +132,11 @@ function App() {
                       <Page
                           backAction={{content: 'Products', url: '#'}}
                           title="Create volume discount"
-                          secondaryActions={<button disabled={_}  className="bg-orange-500 text-white p-2 cursor-pointer rounded-lg border-none" type="submit">
+                          secondaryActions={<button disabled={_}
+                                                    onClick={async () => {
+                                                        await trigger(["title", "option","campaign"])
+                                                    }}
+                                                    className={`text-white p-2 rounded-lg border-none ${!_? "bg-orange-500 cursor-pointer" : "bg-gray-200"}`} type="submit">
                               {_ ? <> <Loading /> Loading... </> :"Submit"}
                           </button>}
                       >
@@ -351,10 +355,15 @@ function App() {
               </div>
               <div className="relative top-[5rem] mr-5 space-y-3">
                   <Card >
-                      <div className="Polaris-LegacyStack__Item">
+                      <div className="Polaris-LegacyStack__Item my-3">
                           <h5 className="Polaris-Text--root Polaris-Text--headingLg">Preview</h5>
                       </div>
-
+                        <div className="text-center my-3">
+                            <div className="Polaris-LegacyStack__Item">
+                                <h6 className="Polaris-Text--root Polaris-Text--headingMd">Buy more and save</h6>
+                            </div>
+                        </div>
+                      <p>Apply for all products in store</p>
                       <div id="content">
                           {watchOption && watchOption.length > 0 ? (
                               <DiscountTable
